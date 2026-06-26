@@ -25,7 +25,10 @@ const updateCompanyProfile = async (req, res) => {
         // 1. Define exactly what the user is allowed to edit manually
         const PATCHABLE_FIELDS = [
             'companyName', 'industry', 'website', 'incorporationYear', 
-            'registeredOffice', 'companyProfile', 'pan', 'cin'
+            'registeredOffice', 'branchOffice', 'companyProfile', 'pan', 'cin',
+            'globalNetwork', 'businessModel', 'keyMilestones', 'keyClients',
+            'directors', 'financials', 'existingDebts', 'orderBook', 'linesOfCredit',
+            'fundingRequirement'
         ];
 
         // 2. Build a safe update object containing ONLY allowed fields

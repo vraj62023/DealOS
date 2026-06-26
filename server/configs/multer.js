@@ -1,39 +1,43 @@
-const cloudinary = require('cloudinary').v2;
-const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const multer = require('multer');
-require('dotenv').config();
+const path = require('path');
+const fs = require('fs');
 
-// Configure Cloudinary with your credentials
-cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET
-});
+// Ensure uploads directory exists locally
+const uploadDir = path.join(__dirname, '../uploads');
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+}
 
-// Configure the Storage Engine
-const storage = new CloudinaryStorage({
-    cloudinary: cloudinary,
-    params: {
-        folder: 'DealOS_Dataroom', 
-        allowed_formats: ['jpg', 'png', 'pdf', 'jpeg'], 
-        resource_type: 'auto' // Required to allow non-image files like PDFs
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        const sanitizedName = file.originalname.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9._-]/g, '');
+        cb(null, `${uniqueSuffix}-${sanitizedName}`);
     }
 });
 
-// Initialize Multer with the storage engine, size limits, and file filters
 const upload = multer({ 
     storage: storage,
     limits: { 
-        fileSize: 10 * 1024 * 1024 // 10MB maximum file size
+        fileSize: 10 * 1024 * 1024
     }, 
     fileFilter: (req, file, cb) => {
-        // Only allow PDFs and standard image types
-        const allowedMimeTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
+        const allowedMimeTypes = [
+            'application/pdf', 
+            'image/jpeg', 
+            'image/png', 
+            'image/jpg',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/msword'
+        ];
         
         if (allowedMimeTypes.includes(file.mimetype)) {
             cb(null, true);
         } else {
-            cb(new Error('Invalid file type. Only PDF, JPG, and PNG files are allowed.'), false);
+            cb(new Error(`Invalid file type: ${file.mimetype}. Only PDF, JPG, PNG, and Word files are allowed.`), false);
         }
     }
 });

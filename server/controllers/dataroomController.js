@@ -4,6 +4,10 @@ const Document = require('../models/Document');
 // @route   POST /api/dataroom/upload
 const uploadDocument = async (req, res) => {
     try {
+        console.log("=== UPLOAD HIT ===");
+        console.log("req.file:", req.file);
+        console.log("req.body:", req.body);
+
         if (!req.file) {
             return res.status(400).json({ message: 'No file uploaded' });
         }
@@ -21,13 +25,10 @@ const uploadDocument = async (req, res) => {
             return res.status(400).json({ message: 'Invalid document category' });
         }
 
-        // The abstraction line: Supports both Cloudinary (.path) and AWS S3 (.location)
-        const secureFileUrl = req.file.path || req.file.location; 
+        // Construct HTTP URL pointing to the local static uploads route
+        const secureFileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`; 
 
-        const sanitizedFileName = `${Date.now()}_${req.file.originalname
-            .replace(/\s+/g, '_')
-            .replace(/[^a-zA-Z0-9._-]/g, '')
-            .toLowerCase()}`;
+        const sanitizedFileName = req.file.filename;
 
         // Create the document record in MongoDB
         const newDocument = await Document.create({
