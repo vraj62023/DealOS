@@ -1,3 +1,7 @@
 node_modules/
 .env
 .DS_Store
+
+# Ignore server uploads but track the directory structure
+server/uploads/*
+!server/uploads/.gitkeep

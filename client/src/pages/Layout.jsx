@@ -29,7 +29,6 @@ export default function Layout() {
     { name: 'PROBE Agent', path: '/dashboard', icon: <Bot size={20} /> },
     { name: 'Data Room', path: '/dashboard/dataroom', icon: <FolderOpen size={20} /> },
     { name: 'Lender Matches', path: '/dashboard/matches', icon: <TrendingUp size={20} /> },
-    { name: 'Settings', path: '/dashboard/settings', icon: <Settings size={20} /> },
   ];
 
   return (
@@ -83,7 +82,7 @@ export default function Layout() {
           ))}
         </nav>
 
-        {/* User Profile & Logout Bottom Section */}
+        {/* User Profile & Settings Bottom Section */}
         <div className="p-4 bg-gray-950 border-t border-gray-800">
           <div className="flex items-center gap-3 px-2 mb-4">
             <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-lg shadow-inner">
@@ -94,13 +93,20 @@ export default function Layout() {
               <p className="text-xs text-gray-500 truncate">{user?.companyName || 'Corporate Profile'}</p>
             </div>
           </div>
-          <button 
-            onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-gray-400 hover:text-red-400 hover:bg-gray-800/50 rounded-lg transition-colors"
+          <NavLink 
+            to="/dashboard/settings"
+            onClick={() => setIsSidebarOpen(false)}
+            className={({ isActive }) => `
+              w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-lg transition-colors
+              ${isActive 
+                ? 'bg-blue-600 text-white font-semibold shadow-md shadow-blue-500/20' 
+                : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+              }
+            `}
           >
-            <LogOut size={18} />
-            Secure Logout
-          </button>
+            <Settings size={18} />
+            Platform Settings
+          </NavLink>
         </div>
       </aside>
 

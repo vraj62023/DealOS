@@ -22,6 +22,7 @@ app.use('/api/company', require('./routes/companyRoutes'));
 app.use('/api/ai', require('./routes/aiRoutes'));
 app.use('/api/dataroom', require('./routes/dataroomRoutes'));
 app.use('/api/matches', require('./routes/matchRoutes'));
+app.use('/api/webhooks', require('./routes/webhookRoutes'));
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);

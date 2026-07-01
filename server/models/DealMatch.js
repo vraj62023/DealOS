@@ -39,7 +39,19 @@ const DealMatchSchema = new mongoose.Schema({
     
     // Track when the deal was sent to the lender
     lastSharedAt: { type: Date, default: Date.now },
-    isTopPick: { type: Boolean, default: false }
+    isTopPick: { type: Boolean, default: false },
+
+    // AI Credit Underwriter Outputs
+    underwriting: {
+        creditRating: { type: String }, // e.g. 'A+', 'BBB'
+        riskRationale: { type: String }, // Underwriter's detailed assessment memo
+        calculatedRatios: {
+            leverage: { type: Number }, // Total Debt / EBITDA
+            debtToEquity: { type: Number }, // Total Debt / Net Worth
+            currentRatio: { type: Number }, // Current Assets / Current Liabilities
+            dscr: { type: Number } // Debt Service Coverage Ratio
+        }
+    }
 
 }, { timestamps: true });
 

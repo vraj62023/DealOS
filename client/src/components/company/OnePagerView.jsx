@@ -11,6 +11,7 @@ export default function OnePagerView() {
   
   const [isEditMode, setIsEditMode] = useState(false);
   const [editedData, setEditedData] = useState(null);
+  const [finViewMode, setFinViewMode] = useState('table'); // 'table' or 'chart'
 
   // Initialize edited data state when entering edit mode or when company updates
   useEffect(() => {
@@ -127,6 +128,136 @@ export default function OnePagerView() {
   const financials = d.financials || [];
   const existingDebts = d.existingDebts || [];
   const orderBook = d.orderBook || [];
+
+  const renderFinancialsChart = () => {
+    if (!financials || financials.length === 0) {
+      return <div className="p-4 text-center text-gray-400 text-xs font-sans">No financial records to chart</div>;
+    }
+
+    // Sort financials chronologically by year (e.g. FY23, FY24)
+    const sortedFin = [...financials].sort((a, b) => {
+      const yrA = parseInt(a.year?.replace(/\D/g, '')) || 0;
+      const yrB = parseInt(b.year?.replace(/\D/g, '')) || 0;
+      return yrA - yrB;
+    });
+
+    const maxRev = Math.max(...sortedFin.map(f => parseFloat(f.revenue) || 0), 10);
+    const maxEbitda = Math.max(...sortedFin.map(f => parseFloat(f.ebitda) || 0), 2);
+
+    const svgWidth = 500;
+    const svgHeight = 200;
+    const paddingLeft = 45;
+    const paddingRight = 45;
+    const paddingTop = 20;
+    const paddingBottom = 30;
+
+    const chartWidth = svgWidth - paddingLeft - paddingRight;
+    const chartHeight = svgHeight - paddingTop - paddingBottom;
+
+    const barWidth = Math.min(35, chartWidth / (sortedFin.length * 2));
+    const stepX = sortedFin.length > 1 ? chartWidth / (sortedFin.length - 1) : chartWidth;
+
+    return (
+      <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-4">
+        <div className="flex justify-between items-center text-xs">
+          <div className="flex gap-4">
+            <span className="flex items-center gap-1.5 font-semibold text-purple-700">
+              <span className="w-3 h-3 bg-purple-500 rounded-sm"></span>
+              Revenue (LHS)
+            </span>
+            <span className="flex items-center gap-1.5 font-semibold text-emerald-700">
+              <span className="w-3.5 h-0.5 bg-emerald-500 inline-block"></span>
+              EBITDA (RHS)
+            </span>
+          </div>
+          <span className="text-[10px] text-gray-400 font-bold font-sans">INR Crores</span>
+        </div>
+
+        <svg width="100%" height={svgHeight} viewBox={`0 0 ${svgWidth} ${svgHeight}`} className="overflow-visible select-none">
+          {/* Horizontal Grid lines */}
+          {[0, 0.25, 0.5, 0.75, 1.0].map((tick, idx) => {
+            const y = paddingTop + chartHeight * (1 - tick);
+            return (
+              <g key={idx} className="opacity-40">
+                <line x1={paddingLeft} y1={y} x2={svgWidth - paddingRight} y2={y} stroke="#e5e7eb" strokeDasharray="3 3" strokeWidth="1" />
+                {/* LHS axis ticks */}
+                <text x={paddingLeft - 8} y={y + 3} textAnchor="end" className="fill-gray-400 font-sans text-[8px] font-semibold">
+                  {Math.round(maxRev * tick)}
+                </text>
+                {/* RHS axis ticks */}
+                <text x={svgWidth - paddingRight + 8} y={y + 3} textAnchor="start" className="fill-gray-400 font-sans text-[8px] font-semibold">
+                  {Math.round(maxEbitda * tick)}
+                </text>
+              </g>
+            );
+          })}
+
+          {/* Render Bars (Revenue) */}
+          {sortedFin.map((f, idx) => {
+            const rev = parseFloat(f.revenue) || 0;
+            const x = paddingLeft + (idx * stepX);
+            const revBarHeight = (rev / maxRev) * chartHeight;
+            const revY = paddingTop + chartHeight - revBarHeight;
+
+            return (
+              <g key={idx}>
+                <rect 
+                  x={x - barWidth / 2} 
+                  y={revY} 
+                  width={barWidth} 
+                  height={revBarHeight} 
+                  className="fill-purple-500/80 hover:fill-purple-600 transition-colors" 
+                  rx="2"
+                />
+                
+                {/* Year Label */}
+                <text x={x} y={svgHeight - 8} textAnchor="middle" className="fill-gray-600 font-bold font-sans text-[9px]">
+                  {f.year}
+                </text>
+                
+                {/* Values overlay */}
+                <text x={x} y={revY - 5} textAnchor="middle" className="fill-purple-800 font-bold font-sans text-[8px]">
+                  {rev ? `₹${rev}` : ''}
+                </text>
+              </g>
+            );
+          })}
+
+          {/* EBITDA Line Path */}
+          {sortedFin.length > 0 && (
+            <path 
+              d={sortedFin.map((f, idx) => {
+                const eb = parseFloat(f.ebitda) || 0;
+                const x = paddingLeft + (idx * stepX);
+                const y = paddingTop + chartHeight - ((eb / maxEbitda) * chartHeight);
+                return `${idx === 0 ? 'M' : 'L'} ${x} ${y}`;
+              }).join(' ')}
+              fill="none"
+              stroke="#10b981"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          )}
+
+          {/* EBITDA Line Nodes */}
+          {sortedFin.map((f, idx) => {
+            const eb = parseFloat(f.ebitda) || 0;
+            const x = paddingLeft + (idx * stepX);
+            const y = paddingTop + chartHeight - ((eb / maxEbitda) * chartHeight);
+            return (
+              <g key={idx}>
+                <circle cx={x} cy={y} r="3.5" className="fill-white stroke-emerald-500 stroke-2" />
+                <text x={x + 6} y={y - 4} className="fill-emerald-800 font-sans font-bold text-[8px]">
+                  {eb ? `₹${eb}` : ''}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+    );
+  };
   const linesOfCredit = d.linesOfCredit || [];
   const globalNetwork = d.globalNetwork || [];
   const keyClients = d.keyClients || [];
@@ -469,111 +600,146 @@ export default function OnePagerView() {
             </div>
 
             {/* SECTION 5: FINANCIAL SUMMARY */}
-            <div>
-              <h3 className="font-sans text-xs font-bold uppercase tracking-wider text-gray-600 mb-2">Financial Summary (INR Crores)</h3>
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <h3 className="font-sans text-xs font-bold uppercase tracking-wider text-gray-600">Financial Summary (INR Crores)</h3>
+                
+                {/* View switcher tabs */}
+                <div className="flex bg-gray-100 p-0.5 rounded-lg border border-gray-200">
+                  <button 
+                    type="button"
+                    onClick={() => setFinViewMode('table')}
+                    className={`px-2.5 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${
+                      finViewMode === 'table' 
+                        ? 'bg-white text-purple-700 shadow-sm border border-gray-100' 
+                        : 'text-gray-500 hover:text-gray-800'
+                    }`}
+                  >
+                    Table
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => setFinViewMode('chart')}
+                    className={`px-2.5 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${
+                      finViewMode === 'chart' 
+                        ? 'bg-white text-purple-700 shadow-sm border border-gray-100' 
+                        : 'text-gray-500 hover:text-gray-800'
+                    }`}
+                  >
+                    Trend Chart
+                  </button>
+                </div>
+              </div>
               
-              {/* Financial columns structure */}
-              <table className="w-full border-collapse border-t-2 border-b-2 border-gray-800 mb-6">
-                <thead>
-                  <tr className="bg-gray-100 border-b border-gray-400">
-                    <th className="px-3 py-2 text-left font-sans text-xs uppercase tracking-wider font-bold">Balance Sheet Metrics</th>
-                    {financials.map((f, idx) => (
-                      <th key={idx} className="px-3 py-2 text-right font-sans text-xs uppercase tracking-wider font-bold">
-                        {isEditMode ? (
-                          <input 
-                            type="text" 
-                            value={f.year || ''} 
-                            onChange={(e) => handleArrayChange('financials', idx, 'year', e.target.value)}
-                            className="w-16 px-1 py-0.5 text-xs text-right border border-blue-300 bg-blue-50/50 rounded"
-                          />
-                        ) : (
-                          f.year
+              {finViewMode === 'chart' ? (
+                renderFinancialsChart()
+              ) : (
+                <div className="space-y-6">
+                  {/* Financial columns structure */}
+                  <table className="w-full border-collapse border-t-2 border-b-2 border-gray-800">
+                    <thead>
+                      <tr className="bg-gray-100 border-b border-gray-400">
+                        <th className="px-3 py-2 text-left font-sans text-xs uppercase tracking-wider font-bold">Balance Sheet Metrics</th>
+                        {financials.map((f, idx) => (
+                          <th key={idx} className="px-3 py-2 text-right font-sans text-xs uppercase tracking-wider font-bold">
+                            {isEditMode ? (
+                              <input 
+                                type="text" 
+                                value={f.year || ''} 
+                                onChange={(e) => handleArrayChange('financials', idx, 'year', e.target.value)}
+                                className="w-16 px-1 py-0.5 text-xs text-right border border-blue-300 bg-blue-50/50 rounded"
+                              />
+                            ) : (
+                              f.year
+                            )}
+                          </th>
+                        ))}
+                        {isEditMode && (
+                          <th className="px-3 py-2 text-right w-12">
+                            <button 
+                              type="button"
+                              onClick={() => handleAddRow('financials', { year: `FY${25 - financials.length}` })}
+                              className="text-blue-600 hover:text-blue-800"
+                            >
+                              <Plus size={14} />
+                            </button>
+                          </th>
                         )}
-                      </th>
-                    ))}
-                    {isEditMode && (
-                      <th className="px-3 py-2 text-right w-12">
-                        <button 
-                          onClick={() => handleAddRow('financials', { year: `FY${25 - financials.length}` })}
-                          className="text-blue-600 hover:text-blue-800"
-                        >
-                          <Plus size={14} />
-                        </button>
-                      </th>
-                    )}
-                  </tr>
-                </thead>
-                <tbody>
-                  {[
-                    { label: 'Share Capital', key: 'shareCapital' },
-                    { label: 'Reserves & Surplus', key: 'reservesSurplus' },
-                    { label: 'Net Worth', key: 'netWorth', isBold: true },
-                    { label: 'Long-Term Loans - TL', key: 'longTermLoansTL' },
-                    { label: 'Long-Term Loans - Vehicle', key: 'longTermLoansVehicle' },
-                    { label: 'Short-Term Loans - Bank', key: 'shortTermLoansBank' },
-                    { label: 'Unsecured from Directors', key: 'unsecuredFromDirectors' },
-                    { label: 'Trade Payables', key: 'tradePayables' },
-                    { label: 'Other Current Liabilities', key: 'otherCurrentLiabilities' },
-                    { label: 'Short-Term Provisions', key: 'shortTermProvisions' },
-                    { label: 'Fixed Assets', key: 'fixedAssets' },
-                    { label: 'Inventories', key: 'inventories' },
-                    { label: 'Trade Receivables', key: 'tradeReceivables' },
-                    { label: 'Cash & Bank Balances', key: 'cashBankBalances' },
-                    { label: 'Other Current Assets', key: 'otherCurrentAssets' }
-                  ].map((row) => (
-                    <tr key={row.key} className={`border-b border-gray-200 ${row.isBold ? 'font-bold bg-gray-50' : ''}`}>
-                      <td className="px-3 py-1.5 text-xs">{row.label}</td>
-                      {financials.map((f, idx) => (
-                        <td key={idx} className="px-3 py-1.5 text-right text-xs">
-                          {renderEditableCell(f[row.key], (v) => handleArrayChange('financials', idx, row.key, v), '0.00', 'number')}
-                        </td>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[
+                        { label: 'Share Capital', key: 'shareCapital' },
+                        { label: 'Reserves & Surplus', key: 'reservesSurplus' },
+                        { label: 'Net Worth', key: 'netWorth', isBold: true },
+                        { label: 'Long-Term Loans - TL', key: 'longTermLoansTL' },
+                        { label: 'Long-Term Loans - Vehicle', key: 'longTermLoansVehicle' },
+                        { label: 'Short-Term Loans - Bank', key: 'shortTermLoansBank' },
+                        { label: 'Unsecured from Directors', key: 'unsecuredFromDirectors' },
+                        { label: 'Trade Payables', key: 'tradePayables' },
+                        { label: 'Other Current Liabilities', key: 'otherCurrentLiabilities' },
+                        { label: 'Short-Term Provisions', key: 'shortTermProvisions' },
+                        { label: 'Fixed Assets', key: 'fixedAssets' },
+                        { label: 'Inventories', key: 'inventories' },
+                        { label: 'Trade Receivables', key: 'tradeReceivables' },
+                        { label: 'Cash & Bank Balances', key: 'cashBankBalances' },
+                        { label: 'Other Current Assets', key: 'otherCurrentAssets' }
+                      ].map((row) => (
+                        <tr key={row.key} className={`border-b border-gray-200 ${row.isBold ? 'font-bold bg-gray-50' : ''}`}>
+                          <td className="px-3 py-1.5 text-xs">{row.label}</td>
+                          {financials.map((f, idx) => (
+                            <td key={idx} className="px-3 py-1.5 text-right text-xs">
+                              {renderEditableCell(f[row.key], (v) => handleArrayChange('financials', idx, row.key, v), '0.00', 'number')}
+                            </td>
+                          ))}
+                          {isEditMode && <td className="px-3 py-1.5 text-right">
+                            <button type="button" onClick={() => handleRemoveRow('financials', idx)} className="text-red-500 hover:text-red-700">
+                              <Trash2 size={12} />
+                            </button>
+                          </td>}
+                        </tr>
                       ))}
-                      {isEditMode && <td className="px-3 py-1.5 text-right">
-                        <button onClick={() => handleRemoveRow('financials', idx)} className="text-red-500 hover:text-red-700">
-                          <Trash2 size={12} />
-                        </button>
-                      </td>}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                    </tbody>
+                  </table>
 
-              {/* Profit & Loss Table */}
-              <table className="w-full border-collapse border-t-2 border-b-2 border-gray-800">
-                <thead>
-                  <tr className="bg-gray-100 border-b border-gray-400">
-                    <th className="px-3 py-2 text-left font-sans text-xs uppercase tracking-wider font-bold">Profit &amp; Loss Statements</th>
-                    {financials.map((f, idx) => (
-                      <th key={idx} className="px-3 py-2 text-right font-sans text-xs uppercase tracking-wider font-bold">{f.year}</th>
-                    ))}
-                    {isEditMode && <th className="w-12"></th>}
-                  </tr>
-                </thead>
-                <tbody>
-                  {[
-                    { label: 'Revenue', key: 'revenue' },
-                    { label: 'Other Income', key: 'otherIncome' },
-                    { label: 'Total Revenue', key: 'totalRevenue', isBold: true },
-                    { label: 'COGS', key: 'cogs' },
-                    { label: 'EBITDA', key: 'ebitda', isBold: true },
-                    { label: 'Finance Cost', key: 'financeCost' },
-                    { label: 'Depreciation & Amortisation', key: 'depreciationAmortisation' },
-                    { label: 'Profit Before Tax', key: 'profitBeforeTax' },
-                    { label: 'Profit After Tax (PAT)', key: 'profitAfterTax', isBold: true },
-                    { label: 'Cash Profits', key: 'cashProfits' }
-                  ].map((row) => (
-                    <tr key={row.key} className={`border-b border-gray-200 ${row.isBold ? 'font-bold bg-gray-50' : ''}`}>
-                      <td className="px-3 py-1.5 text-xs">{row.label}</td>
-                      {financials.map((f, idx) => (
-                        <td key={idx} className="px-3 py-1.5 text-right text-xs">
-                          {renderEditableCell(f[row.key], (v) => handleArrayChange('financials', idx, row.key, v), '0.00', 'number')}
-                        </td>
+                  {/* Profit & Loss Table */}
+                  <table className="w-full border-collapse border-t-2 border-b-2 border-gray-800">
+                    <thead>
+                      <tr className="bg-gray-100 border-b border-gray-400">
+                        <th className="px-3 py-2 text-left font-sans text-xs uppercase tracking-wider font-bold">Profit &amp; Loss Statements</th>
+                        {financials.map((f, idx) => (
+                          <th key={idx} className="px-3 py-2 text-right font-sans text-xs uppercase tracking-wider font-bold">{f.year}</th>
+                        ))}
+                        {isEditMode && <th className="w-12"></th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[
+                        { label: 'Revenue', key: 'revenue' },
+                        { label: 'Other Income', key: 'otherIncome' },
+                        { label: 'Total Revenue', key: 'totalRevenue', isBold: true },
+                        { label: 'COGS', key: 'cogs' },
+                        { label: 'EBITDA', key: 'ebitda', isBold: true },
+                        { label: 'Finance Cost', key: 'financeCost' },
+                        { label: 'Depreciation & Amortisation', key: 'depreciationAmortisation' },
+                        { label: 'Profit Before Tax', key: 'profitBeforeTax' },
+                        { label: 'Profit After Tax (PAT)', key: 'profitAfterTax', isBold: true },
+                        { label: 'Cash Profits', key: 'cashProfits' }
+                      ].map((row) => (
+                        <tr key={row.key} className={`border-b border-gray-200 ${row.isBold ? 'font-bold bg-gray-50' : ''}`}>
+                          <td className="px-3 py-1.5 text-xs">{row.label}</td>
+                          {financials.map((f, idx) => (
+                            <td key={idx} className="px-3 py-1.5 text-right text-xs">
+                              {renderEditableCell(f[row.key], (v) => handleArrayChange('financials', idx, row.key, v), '0.00', 'number')}
+                            </td>
+                          ))}
+                          {isEditMode && <td></td>}
+                        </tr>
                       ))}
-                      {isEditMode && <td></td>}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
 
             {/* SECTION 6: DEBT SCHEDULE */}

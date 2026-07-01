@@ -69,7 +69,6 @@ const shouldUseSearch = (message, companyName, currentCompany) => {
     return true;
 };
 
-// Robust JSON extraction to handle search grounding text and footnotes
 const cleanJsonResponse = (text) => {
     try {
         const firstBrace = text.indexOf('{');
@@ -78,7 +77,9 @@ const cleanJsonResponse = (text) => {
             console.error("No JSON braces found in text:", text);
             return null;
         }
-        const jsonStr = text.slice(firstBrace, lastBrace + 1);
+        let jsonStr = text.slice(firstBrace, lastBrace + 1);
+        // Sanitize trailing/misplaced commas (e.g., ,} or ,])
+        jsonStr = jsonStr.replace(/,\s*([}\]])/g, '$1');
         return JSON.parse(jsonStr);
     } catch (error) {
         console.error("Failed to parse AI response as JSON:", text);
@@ -488,10 +489,29 @@ const extractDocumentData = async (req, res) => {
         }
 
         const response = await axios.get(fileUrl, { responseType: 'arraybuffer' });
-        const mimeType = fileUrl.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg';
-        const filePart = {
-            inlineData: { data: Buffer.from(response.data).toString("base64"), mimeType }
-        };
+        
+        const isPdf = fileUrl.toLowerCase().endsWith('.pdf');
+        const isDocx = fileUrl.toLowerCase().endsWith('.docx') || fileUrl.toLowerCase().endsWith('.doc');
+
+        let extractedText = '';
+        if (isPdf) {
+            try {
+                const { PDFParse } = require('pdf-parse');
+                const parser = new PDFParse({ data: Buffer.from(response.data) }, Buffer.from(response.data));
+                const parsed = await parser.getText();
+                extractedText = parsed.text || '';
+            } catch (parseErr) {
+                console.error("Local PDF parsing failed, falling back to multi-modal OCR:", parseErr.message);
+            }
+        } else if (isDocx) {
+            try {
+                const mammoth = require('mammoth');
+                const parsed = await mammoth.extractRawText({ buffer: Buffer.from(response.data) });
+                extractedText = parsed.value || '';
+            } catch (parseErr) {
+                console.error("Local Word parsing failed:", parseErr.message);
+            }
+        }
 
         // Intelligent auto-detection of category inside the prompt
         let prompt = `Analyze this document. 
@@ -536,15 +556,37 @@ const extractDocumentData = async (req, res) => {
         `;
 
         let result;
-        try {
-            result = await modelStandard.generateContent([prompt, filePart]);
-        } catch (error) {
-            console.error("Primary model failed in document extraction, trying fallback model:", error.message);
+        if (extractedText && extractedText.trim().length > 100) {
+            console.log(`[Document Extraction] Using locally parsed text snippet (${extractedText.length} chars).`);
+            const textSnippet = extractedText.slice(0, 45000);
+            const promptWithText = `${prompt}\n\nDOCUMENT TEXT CONTENT:\n${textSnippet}`;
             try {
-                result = await modelFallback.generateContent([prompt, filePart]);
-            } catch (fallbackError) {
-                console.error("All models failed in document extraction:", fallbackError.message);
-                throw fallbackError;
+                result = await modelStandard.generateContent(promptWithText);
+            } catch (error) {
+                console.error("Primary model failed with text prompt, trying fallback model:", error.message);
+                try {
+                    result = await modelFallback.generateContent(promptWithText);
+                } catch (fallbackError) {
+                    console.error("All models failed with text prompt:", fallbackError.message);
+                    throw fallbackError;
+                }
+            }
+        } else {
+            console.log(`[Document Extraction] Falling back to multi-modal OCR (scanned PDF or image).`);
+            const mimeType = isPdf ? 'application/pdf' : (fileUrl.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg');
+            const filePart = {
+                inlineData: { data: Buffer.from(response.data).toString("base64"), mimeType }
+            };
+            try {
+                result = await modelStandard.generateContent([prompt, filePart]);
+            } catch (error) {
+                console.error("Primary model failed in multi-modal OCR, trying fallback model:", error.message);
+                try {
+                    result = await modelFallback.generateContent([prompt, filePart]);
+                } catch (fallbackError) {
+                    console.error("All models failed in multi-modal OCR:", fallbackError.message);
+                    throw fallbackError;
+                }
             }
         }
         const extractedData = cleanJsonResponse(result.response.text());

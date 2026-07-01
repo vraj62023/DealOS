@@ -26,6 +26,7 @@ export default function Dataroom() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [uploadCategory, setUploadCategory] = useState('Audited Financials');
   const [selectedFile, setSelectedFile] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef(null);
 
@@ -74,6 +75,39 @@ export default function Dataroom() {
     const file = e.target.files[0];
     if (file) {
       setSelectedFile(file);
+    }
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    if (!isUploading) {
+      setIsDragging(true);
+    }
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (isUploading) return;
+    
+    const file = e.dataTransfer.files[0];
+    if (file) {
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error('File size exceeds 10MB limit');
+        return;
+      }
+      const allowedExtensions = ['.pdf', '.png', '.jpg', '.jpeg', '.docx', '.doc'];
+      const fileExtension = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+      if (!allowedExtensions.includes(fileExtension)) {
+        toast.error('Invalid file type. Please upload PDF, PNG, JPG, or Word files.');
+        return;
+      }
+      setSelectedFile(file);
+      toast.success(`Selected file: ${file.name}`);
     }
   };
 
@@ -286,8 +320,15 @@ export default function Dataroom() {
                 <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1.5">Select File</label>
                 <div 
                   onClick={() => !isUploading && fileInputRef.current.click()}
-                  className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer hover:bg-gray-50 transition-colors ${
-                    selectedFile ? 'border-purple-400 bg-purple-50/10' : 'border-gray-300'
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-all duration-200 ${
+                    isDragging 
+                      ? 'border-purple-600 bg-purple-100/50 scale-102 shadow-md shadow-purple-100' 
+                      : selectedFile 
+                        ? 'border-purple-400 bg-purple-50/10' 
+                        : 'border-gray-300 hover:bg-gray-50'
                   }`}
                 >
                   <input 

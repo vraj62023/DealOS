@@ -51,6 +51,10 @@ const registerUser = async (req, res) => {
             name: user.name,
             email: user.email,
             companyId: user.companyId,
+            role: user.role,
+            webhookUrl: user.webhookUrl,
+            webhookSecret: user.webhookSecret,
+            notificationPreferences: user.notificationPreferences,
             token: generateToken(user._id),
         });
     } catch (error) {
@@ -74,6 +78,10 @@ const loginUser = async (req, res) => {
                 name: user.name,
                 email: user.email,
                 companyId: user.companyId,
+                role: user.role,
+                webhookUrl: user.webhookUrl,
+                webhookSecret: user.webhookSecret,
+                notificationPreferences: user.notificationPreferences,
                 token: generateToken(user._id),
             });
         } else {
@@ -84,4 +92,78 @@ const loginUser = async (req, res) => {
     }
 };
 
-module.exports = { registerUser, loginUser };
+// @desc    Update user profile & preferences
+// @route   PUT /api/auth/profile
+const updateUserProfile = async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id);
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        if (req.body.name) user.name = req.body.name;
+        if (req.body.role) user.role = req.body.role;
+        if (req.body.webhookUrl) user.webhookUrl = req.body.webhookUrl;
+        if (req.body.webhookSecret) user.webhookSecret = req.body.webhookSecret;
+        if (req.body.notificationPreferences) {
+            user.notificationPreferences = {
+                ...user.notificationPreferences.toObject(),
+                ...req.body.notificationPreferences
+            };
+        }
+
+        // Optional password update
+        if (req.body.password && req.body.newPassword) {
+            const isMatch = await bcrypt.compare(req.body.password, user.password);
+            if (!isMatch) {
+                return res.status(400).json({ message: 'Invalid current password' });
+            }
+            const salt = await bcrypt.genSalt(10);
+            user.password = await bcrypt.hash(req.body.newPassword, salt);
+        }
+
+        const updatedUser = await user.save();
+
+        res.json({
+            _id: updatedUser._id,
+            name: updatedUser.name,
+            email: updatedUser.email,
+            companyId: updatedUser.companyId,
+            role: updatedUser.role,
+            webhookUrl: updatedUser.webhookUrl,
+            webhookSecret: updatedUser.webhookSecret,
+            notificationPreferences: updatedUser.notificationPreferences,
+            token: generateToken(updatedUser._id)
+        });
+    } catch (error) {
+        console.error("Update profile error:", error);
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc    Rotate HMAC Signature Secret
+// @route   POST /api/auth/rotate-webhook-secret
+const rotateWebhookSecret = async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id);
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+        
+        const crypto = require('crypto');
+        const newSecret = crypto.randomBytes(16).toString('hex');
+        user.webhookSecret = newSecret;
+        await user.save();
+
+        res.json({
+            message: 'Webhook secret key rotated successfully',
+            webhookSecret: newSecret
+        });
+    } catch (error) {
+        console.error("Rotate secret error:", error);
+        res.status(500).json({ message: error.message });
+    }
+};
+
+module.exports = { registerUser, loginUser, updateUserProfile, rotateWebhookSecret };
